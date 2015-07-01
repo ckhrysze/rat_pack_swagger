@@ -1,89 +1,70 @@
 require 'sinatra/base'
+require 'json'
 
-class SwaggerInfo
-  def initialize(&block)
+class SwaggerObject 
+  instance_methods.each do |m|
+    unless m =~ /^__/ || [:instance_eval, :object_id].include?(m)
+      undef_method m
+    end
+  end
+
+  def initialize(**kwargs, &block)
+    @obj ||= {}
+    @obj.merge! kwargs
     instance_eval &block
   end
 
-  def title(app_title)
-    @title = app_title
+  def method_missing(m, *args, &block)
+    if block_given?
+      @obj[m] = SwaggerObject.new(&block).to_h
+    else
+      @obj[m] = args[0]
+    end
   end
 
-  def description(app_description)
-    @description = app_description
-  end
-
-  def version(app_version)
-    @version = app_version
-  end
-
-  def contact(app_contact)
-    @contact = app_contact
-  end
-
-  def to_hash
-    {
-      title: @title,
-      description: @description,
-      version: @version,
-      contact: {
-        name: @contact[:name],
-        email: @contact[:email]
-      }
-    }
+  def to_h
+    @obj
   end
 end
 
 module Sinatra
   module RatPackSwagger
-    def swagger(version)
-      @@doc ||= {}
-      @@doc["swagger"] = version
-    end
-
-    def info(&block)
-      @@doc ||= {}
-      @@doc["info"] = SwaggerInfo.new(&block).to_hash
+    def swagger(&block)
+      @@doc.merge!(SwaggerObject.new(&block).to_h)
     end
 
     def desc(description)
       @@desc = description
     end
 
-    def param(opts)
-      puts "in param"
+    def param(**kwargs, &block)
       @@parameters ||= []
-      puts opts
-      @@parameters << opts
+      @@parameters << kwargs.merge(SwaggerObject.new(&block).to_h)
     end
-    
-    def add_swagger_route(app)
+
+    def self.registered(app)
       app.get "/v2/swagger.json" do
         content_type "application/json"
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, api-key, Authorization'
+        response['Access-Control-Allow-Methods'] = 'GET, POST'
         @@doc.to_json
       end
+      @@doc = {}
     end
 
     def self.route_added(verb, path, block)
       return if path == "/v2/swagger.json"
       return unless ["GET", "POST", "PUT", "DELETE"].include?(verb)
 
-      @@doc ||= {}
       @@doc["paths"] ||= {}
+      @@desc ||= ""
 
       @@doc["paths"][path] = {
         verb.downcase => {
           "description" => @@desc,
           "produces" => [ "application/json" ],
-          "parameters" => @@parameters.map { |p|
-            {
-              "name" => p[:name],
-              "in" => p[:type],
-              "description" => p[:desc],
-              "required" => p[:required] == true,
-              "type" => p[:type]
-            }
-          },
+          "parameters" => @@parameters,
           "responses" => {
             "200" => {
               "description" => @@desc
@@ -93,8 +74,7 @@ module Sinatra
       }
 
       @@parameters = []
+      @@desc = nil
     end
   end
-  
-  register RatPackSwagger
 end
