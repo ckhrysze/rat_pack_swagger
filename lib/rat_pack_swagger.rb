@@ -29,8 +29,8 @@ end
 
 module Sinatra
   module RatPackSwagger
-    def swagger(&block)
-      @@doc.merge!(SwaggerObject.new(&block).to_h)
+    def swagger(**kwargs, &block)
+      @@doc.merge!(kwargs.merge(SwaggerObject.new(&block).to_h))
     end
 
     def desc(description)
