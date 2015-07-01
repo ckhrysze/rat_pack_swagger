@@ -1,9 +1,9 @@
 require 'sinatra/base'
 require 'json'
 
-class SwaggerObject
-  instance_methods.each do |m| 
-    unless m =~ /^__/ || [:undef_method, :new, :method_missing, :initialize, :instance_eval, :object_id].include?(m)
+class SwaggerObject 
+  instance_methods.each do |m|
+    unless m =~ /^__/ || [:instance_eval, :object_id].include?(m)
       undef_method m
     end
   end
@@ -29,8 +29,8 @@ end
 
 module Sinatra
   module RatPackSwagger
-    def swagger(&block) 
-      @@doc.merge!(SwaggerObject.new(&block).to_h) 
+    def swagger(&block)
+      @@doc.merge!(SwaggerObject.new(&block).to_h)
     end
 
     def desc(description)
@@ -41,13 +41,13 @@ module Sinatra
       @@parameters ||= []
       @@parameters << kwargs.merge(SwaggerObject.new(&block).to_h)
     end
-    
+
     def self.registered(app)
       app.get "/v2/swagger.json" do
         content_type "application/json"
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Headers'] = 'Content-Type, api-key, Authorization'
-        response['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, PUT'
+        response['Access-Control-Allow-Methods'] = 'GET, POST'
         @@doc.to_json
       end
       @@doc = {}
@@ -67,7 +67,7 @@ module Sinatra
           "parameters" => @@parameters,
           "responses" => {
             "200" => {
-              "description" => @@desc 
+              "description" => @@desc
             }
           }
         }
