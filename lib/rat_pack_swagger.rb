@@ -54,6 +54,76 @@ class SwaggerObject
   end
 end
 
+module RatPackSwagger
+  module Definition
+    def rps_default_definition
+      {
+        self.class.name.to_sym => {
+          type: 'object',
+          required: [],
+          properties: {}
+        }
+      }
+    end
+
+    def rps_get_definition
+      @@definition ||= rps_default_definition
+    end
+
+    def method_missing(m, **kwargs, &block)
+      defin = rps_get_definition
+      props = defin[:properties]
+      if kwargs[:$ref]
+        kwargs[:$ref] = "#/definitions/#{kwargs[:$ref]}"
+      end
+      props[m] = SwaggerObject.new(**kwargs, &block).get
+      attr_accessor m
+    end
+
+    def properties(&block)
+      instance_eval &block
+    end
+
+    def required(*args)
+      defin = rps_get_definition
+      defin[:required].concat([*args]).uniq!
+    end
+
+    def from_h(h)
+      defin = rps_get_definition
+      defin[:required].each do |req|
+        if !h.has_key?(req)
+          raise "#{self.class.name} missing required property: '#{req}'"
+        end
+      end
+      h.each do |k,v|
+        setter = "#{k}="
+        if respond_to? setter
+          send(setter, v)
+        end
+      end
+    end
+
+    def to_h
+      defin = rps_get_definition
+      h = {}
+      setters = methods.select{|m| m =~ /.+=$/}
+      setters.each do |setter|
+        getter = setter.to_s.chop
+        val = send(getter)
+        if defin[:required].include?(getter) && val.nil?
+          raise "Cannot serialize Swagger definition - #{self.class.name} missing required property '#{getter}'"
+        elsif val.respond_to?(:to_h)
+          h[getter] = val.to_h
+        elsif !val.nil?
+          h[getter] = val
+        end
+      end
+      return h
+    end
+  end
+end
+
 module Sinatra
   module RatPackSwagger
     def swagger(*args, **kwargs, &block)
@@ -63,7 +133,7 @@ module Sinatra
         @@doc.merge!(SwaggerObject.new(**kwargs, &block).get)
       else
         # assume single argument is filename of existing json
-        @@doc.merge!(JSON.parse(File.read(args[0])))
+        @@doc.merge!(::JSON.parse(File.read(args[0])))
       end
     end
 
@@ -74,6 +144,11 @@ module Sinatra
     def param(**kwargs, &block)
       @@parameters ||= []
       @@parameters << SwaggerObject.new(**kwargs, &block).get
+    end
+
+    def tags(*args)
+      @@tags ||= []
+      args.each{|a| @@tags << a}
     end
 
     def self.registered(app)
@@ -93,15 +168,17 @@ module Sinatra
 
       @@doc["paths"] ||= {}
       @@desc ||= ""
+      @@tags ||= []
 
       @@doc["paths"][path] = {
         verb.downcase => {
-          "description" => @@desc,
-          "produces" => [ "application/json" ],
-          "parameters" => @@parameters,
-          "responses" => {
+          tags: @@tags,
+          description: @@desc,
+          produces: [ "application/json" ],
+          parameters: @@parameters,
+          responses: {
             "200" => {
-              "description" => @@desc
+              description: @@desc
             }
           }
         }
@@ -109,6 +186,7 @@ module Sinatra
 
       @@parameters = []
       @@desc = nil
+      @@tags = nil
     end
   end
 end
