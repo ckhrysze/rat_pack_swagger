@@ -55,71 +55,123 @@ class SwaggerObject
 end
 
 module RatPackSwagger
-  module Definition
-    def rps_default_definition
-      {
-        self.class.name.to_sym => {
-          type: 'object',
-          required: [],
-          properties: {}
-        }
+  module Validation
+    def validate_object(object_definition, data)
+      check_requireds(object_definition, data)
+      check_object_types(object_definition, data)
+    end
+
+    def check_requireds(object_definition, data)
+      object_definition[:properties].keys.each do |k|
+        if object_definition[:required].include?(k) && data[k].nil?
+          raise "Missing required property #{k}"
+        end
+      end
+    end
+
+    def check_object_types(object_definition, data)
+      data.each do |k,v|
+        property = object_definition[:properties][k]
+
+        # verify 'type' if set
+        type = property[:type]
+        if type
+          case type
+          when :string
+            raise "Property #{k} must be a string, not a #{v.class}" unless [String, Symbol].include?(v.class)  
+          when :number
+            raise "Property #{k} must be a number, not a #{v.class}" unless v.is_a?(Numeric) 
+          when :integer
+            if v.is_a?(Numeric)
+              raise "Property #{k} must be an integer. Value is #{v}" unless v % 1 == 0
+            else
+              raise "Property #{k} must be an integer, not a #{v.class}" unless v.is_a?(Numeric)
+            end
+          when :boolean
+            raise "Property #{k} must be a string, not a #{v.class}" unless [FalseClass, TrueClass].include?(v.class)  
+          when :array
+            raise "Property #{k} must be an array, not a #{v.class}" unless v.is_a?(Array)
+          when :object
+            validate_object(property, v)
+          else
+            raise "Unknown property type '#{type}'"
+          end
+        end
+  
+        # verify type if a ref to another definition class
+        ref = property[:$ref]
+        if ref
+          raise "Property #{k} should be a #{ref}, not a #{v.class}" unless ref.to_s == v.class.name
+        end
+      end
+    end
+  end
+
+  class Definition
+    include Validation
+
+    def self.definition 
+      @@definition ||= {
+        type: 'object',
+        required: [],
+        properties: {}
       }
+      @@definition
     end
 
-    def rps_get_definition
-      @@definition ||= rps_default_definition
+    def definition
+      self.class.definition 
     end
 
-    def method_missing(m, **kwargs, &block)
-      defin = rps_get_definition
-      props = defin[:properties]
+    # Something with minitest wants these?
+    def self.to_str
+      self.class.name.to_s
+    end
+    def self.to_ary
+      [] 
+    end
+
+    def self.method_missing(m, **kwargs, &block)
       if kwargs[:$ref]
         kwargs[:$ref] = "#/definitions/#{kwargs[:$ref]}"
       end
-      props[m] = SwaggerObject.new(**kwargs, &block).get
+      definition[:properties][m] = SwaggerObject.new(**kwargs, &block).get
       attr_accessor m
     end
 
-    def properties(&block)
+    # Class declaration API
+    def self.properties(&block)
       instance_eval &block
     end
-
-    def required(*args)
-      defin = rps_get_definition
-      defin[:required].concat([*args]).uniq!
+    def self.required(*args)
+      definition[:required].concat([*args]).uniq!
     end
 
+    # Instance API
+    def validate
+      validate_object(definition, to_h(false))
+    end
     def from_h(h)
-      defin = rps_get_definition
-      defin[:required].each do |req|
-        if !h.has_key?(req)
-          raise "#{self.class.name} missing required property: '#{req}'"
-        end
-      end
+      props = definition[:properties].keys 
       h.each do |k,v|
-        setter = "#{k}="
-        if respond_to? setter
-          send(setter, v)
+        if props.include?(k.to_sym)
+          send("#{k}=", v)
         end
       end
+      self
     end
-
-    def to_h
-      defin = rps_get_definition
+    def to_h(recur = true)
       h = {}
-      setters = methods.select{|m| m =~ /.+=$/}
-      setters.each do |setter|
-        getter = setter.to_s.chop
-        val = send(getter)
-        if defin[:required].include?(getter) && val.nil?
-          raise "Cannot serialize Swagger definition - #{self.class.name} missing required property '#{getter}'"
-        elsif val.respond_to?(:to_h)
-          h[getter] = val.to_h
-        elsif !val.nil?
-          h[getter] = val
+      props = definition[:properties].keys 
+      props.each do |p|
+        val = send(p)
+        if recur && val.respond_to?(:to_h) && (val.to_h != {})
+          h[p] = val.to_h
+        elsif val
+          h[p] = val
         end
       end
-      return h
+      h
     end
   end
 end
