@@ -3,7 +3,8 @@ require "bundler/setup"
 require "minitest/autorun"
 require_relative "../lib/rat_pack_swagger"
 
-class Win < RatPackSwagger::Definition
+class Win
+  include RatPackSwagger::Definition 
   required :gameId, :partner, :userId
   properties do
     gameId type: :string
@@ -26,7 +27,15 @@ class Win < RatPackSwagger::Definition
   end
 end
 
-class Fighter < RatPackSwagger::Definition
+class Weapon 
+  include  RatPackSwagger::Definition 
+  required :power
+  properties do
+    power type:  :number
+  end
+end
+class Fighter 
+  include RatPackSwagger::Definition 
   required :helmet, :armor
   properties do
     helmet type: :string
@@ -41,21 +50,15 @@ class Fighter < RatPackSwagger::Definition
     end
   end
 end
-class Weapon < RatPackSwagger::Definition
-  required :power
-  properties do
-    power :type :number
-  end
-end
 
 describe RatPackSwagger::Definition do
   describe "Definition" do
     it "should fail on missing required property" do
       f = Fighter.new
-      data = {
+      h = {
         helmet: 'iron helm'
       }
-      f.from_h data
+      f.from_h h
       assert_raises RuntimeError do
         f.validate
       end
@@ -63,22 +66,22 @@ describe RatPackSwagger::Definition do
 
     it "should convert basic properties to hash" do
       f = Fighter.new
-      data = {
+      h = {
         helmet: 'iron helm',
         armor: 'breast plate'
       }
-      actual = f.from_h(data).validate.to_h
-      assert hash == actual
+      actual = f.from_h(h).validate.to_h
+      assert_equal h, actual
     end
 
     it "should convert complex properties to hash" do
       f = Fighter.new
-      data = {
+      h = {
         helmet: 'iron helm',
         armor: 'breast plate'
       }
-      actual = f.from_h(data).validate.to_h
-      assert hash == actual
+      actual = f.from_h(h).validate.to_h
+      assert_equal h, actual
     end
 
     it "should accept non-required properties" do
