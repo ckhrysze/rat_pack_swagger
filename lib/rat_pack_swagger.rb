@@ -190,6 +190,27 @@ module RatPackSwagger
   end
 end
 
+def transform_hash_values(obj, &block)
+  if obj.is_a? Hash
+    obj.each do |k,v|
+      if v.is_a?(Hash) || v.is_a?(Array)
+        obj[k] = transform_hash_values(v, &block)
+      else
+        obj[k] = yield(k,v)
+      end
+    end
+  elsif obj.is_a? Array
+    obj.each_with_index do |e,i|
+      if e.is_a?(Hash) || e.is_a?(Array)
+        obj[i] = transform_hash_values(e, &block)
+      end
+    end
+  else
+    raise "Argument must be a Hash or an Array."
+  end
+  obj
+end
+
 module Sinatra
   module RatPackSwagger
     def swagger(*args, **kwargs, &block)
@@ -203,8 +224,8 @@ module Sinatra
       end
     end
 
-    def desc(description)
-      @@desc = description
+    def description(d)
+      @@description = d
     end
 
     def param(**kwargs, &block)
@@ -217,42 +238,61 @@ module Sinatra
       args.each{|a| @@tags << a}
     end
 
+    def summary(s)
+      @@summary = s
+    end
+
+    def response(http_status_code, **kwargs, &block)
+      @@responses ||= {}
+      @@responses[http_status_code] = SwaggerObject.new(**kwargs, &block).get
+    end
+
+    def definitions(classes)
+      @@doc[:definitions] ||= {}
+      classes.each do |c|
+        @@doc[:definitions][c.to_s.rpartition('::').last] = c.definition
+      end
+    end
+
     def self.registered(app)
-      app.get "/v2/swagger.json" do
-        content_type "application/json"
+      app.get '/v2/swagger.json' do
+        content_type 'application/json'
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Headers'] = 'Content-Type, api-key, Authorization'
         response['Access-Control-Allow-Methods'] = 'GET, POST'
-        @@doc.to_json
+        doc = transform_hash_values(@@doc) do |k,v|
+          k.to_s == '$ref' ? "\#/definitions/#{v.to_s.rpartition('::').last}" : v
+        end
+        doc.to_json 
       end
       @@doc = {}
     end
 
     def self.route_added(verb, path, block)
-      return if path == "/v2/swagger.json"
-      return unless ["GET", "POST", "PUT", "DELETE"].include?(verb)
+      return if path == '/v2/swagger.json'
+      return unless ['GET', 'POST', 'PUT', 'DELETE'].include?(verb)
 
-      @@doc["paths"] ||= {}
-      @@desc ||= ""
+      @@doc['paths'] ||= {}
+      @@description ||= ''
       @@tags ||= []
+      @@summary ||= ''
+      @@responses ||= {}
 
-      @@doc["paths"][path] = {
+      @@doc['paths'][path] = {
         verb.downcase => {
           tags: @@tags,
-          description: @@desc,
-          produces: [ "application/json" ],
+          description: @@description,
+          summary: @@summary,
           parameters: @@parameters,
-          responses: {
-            "200" => {
-              description: @@desc
-            }
-          }
+          responses: @@responses
         }
       }
 
       @@parameters = []
-      @@desc = nil
+      @@description = nil
       @@tags = nil
+      @@summary = nil
+      @@responses = nil
     end
   end
 end
