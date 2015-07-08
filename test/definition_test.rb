@@ -26,27 +26,58 @@ class Win < RatPackSwagger::Definition
   end
 end
 
+class Fighter < RatPackSwagger::Definition
+  required :helmet, :armor
+  properties do
+    helmet type: :string
+    armor type: :string
+    gold type: :integer
+    weapon :$ref => Weapon
+    bag type: :object, required: [:size] do
+      properties do
+        size type: :string, enum: [:small, :big]
+        contents type: :array, items: {type: :string}
+      end
+    end
+  end
+end
+class Weapon < RatPackSwagger::Definition
+  required :power
+  properties do
+    power :type :number
+  end
+end
+
 describe RatPackSwagger::Definition do
   describe "Definition" do
     it "should fail on missing required property" do
-      w = Win.new
-      hash = {
-        gameId: 'banana',
-        partner: 'tomato'
+      f = Fighter.new
+      data = {
+        helmet: 'iron helm'
       }
+      f.from_h data
       assert_raises RuntimeError do
-        w.from_h(hash).validate
+        f.validate
       end
     end
 
-    it "should convert to hash" do
-      w = Win.new
-      hash = {
-        gameId: 'banana',
-        partner: 'tomato',
-        userId: 'apple'
+    it "should convert basic properties to hash" do
+      f = Fighter.new
+      data = {
+        helmet: 'iron helm',
+        armor: 'breast plate'
       }
-      actual = w.from_h(hash).validate.to_h
+      actual = f.from_h(data).validate.to_h
+      assert hash == actual
+    end
+
+    it "should convert complex properties to hash" do
+      f = Fighter.new
+      data = {
+        helmet: 'iron helm',
+        armor: 'breast plate'
+      }
+      actual = f.from_h(data).validate.to_h
       assert hash == actual
     end
 

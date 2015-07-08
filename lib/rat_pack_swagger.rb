@@ -152,8 +152,9 @@ module RatPackSwagger
       validate_object(definition, to_h(false))
     end
     def from_h(h)
-      props = definition[:properties].keys 
+      properties = definition[:properties] 
       h.each do |k,v|
+        property = properties[k]
         if props.include?(k.to_sym)
           send("#{k}=", v)
         end
