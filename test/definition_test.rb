@@ -3,30 +3,6 @@ require "bundler/setup"
 require "minitest/autorun"
 require_relative "../lib/rat_pack_swagger"
 
-class Win
-  include RatPackSwagger::Definition 
-  required :gameId, :partner, :userId
-  properties do
-    gameId type: :string
-    partner type: :string
-    userId type: :string
-    gameRoundId type: :string
-    payout type: :object, required: [:method] do
-      properties do
-        method type: :string, enum: [:percentage, :value]
-        percentage type: :number, minimum: 0, maximum: 100
-        value type: :object, required: [:amount, :currency] do
-          properties do
-            amount type: :integer
-            currency type: :string
-          end
-        end
-      end
-    end
-    currency type: :string
-  end
-end
-
 class Weapon 
   include  RatPackSwagger::Definition 
   required :power
@@ -40,11 +16,11 @@ class Fighter
   properties do
     helmet type: :string
     armor type: :string
-    gold type: :integer
+    gold type: :integer, minimum: 0, maximum: 999
     weapon :$ref => Weapon
     bag type: :object, required: [:size] do
       properties do
-        size type: :string, enum: [:small, :big]
+        size type: :string, enum: ['small', 'big']
         contents type: :array, items: {type: :string}
       end
     end
@@ -85,53 +61,95 @@ describe RatPackSwagger::Definition do
     end
 
     it "should accept non-required properties" do
-      w = Win.new
-      hash = {
-        gameId: 'banana',
-        partner: 'tomato',
-        userId: 'apple',
-        gameRoundId: 'shazbot'
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate',
+        gold: 100
       }
-      actual = w.from_h(hash).validate.to_h
-      assert hash == actual
+      actual = f.from_h(h).validate.to_h
+      assert_equal h, actual
     end
 
     it "should allow properties of object type" do
-      w = Win.new
-      hash = {
-        gameId: 'banana',
-        partner: 'tomato',
-        userId: 'apple',
-        gameRoundId: 'shazbot',
-        payout: {
-          method: 'value',
-          value: {
-            amount: 1234,
-            currency: 'USD'
-          }
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate',
+        bag: {
+          size: 'small',
+          contents: ['potion', 'hearthstone']
         }
       }
-      actual = w.from_h(hash).validate.to_h
-      assert hash == actual
+      actual = f.from_h(h).validate.to_h
+      assert_equal h, actual
     end
 
     it "should fail when a string gets an int" do
-      w = Win.new
-      hash = {
-        gameId: 'banana',
-        partner: 'tomato',
-        userId: 'apple',
-        gameRoundId: 'shazbot',
-        payout: {
-          method: 'value',
-          value: {
-            amount: 1234,
-            currency: 1 # int
-          }
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 12345, # int
+        bag: {
+          size: 'small',
+          contents: ['potion', 'hearthstone']
         }
       }
       assert_raises RuntimeError do
-        w.from_h(hash).validate
+        f.from_h(h).validate
+      end
+    end
+
+    it "should fail when an enum value is invalid" do
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate', 
+        bag: {
+          size: 'WHO CARES', # invalid
+          contents: ['potion', 'hearthstone']
+        }
+      }
+      assert_raises RuntimeError do
+        f.from_h(h).validate
+      end
+    end
+
+    it "should properly convert Class ref property to hash" do
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate', 
+        weapon: {
+          power: 9000
+        }
+      }
+      actual = f.from_h(h).validate.to_h
+      assert_equal h, actual
+      assert_equal Weapon, f.weapon.class
+    end
+
+    it "should fail if integer property value less than minimum" do
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate', 
+        gold: -1
+      }
+      assert_raises RuntimeError do
+        f.from_h(h).validate
+      end
+    end
+
+    it "should fail if integer property value greater than maximum" do
+      f = Fighter.new
+      h = {
+        helmet: 'iron helm',
+        armor: 'breast plate', 
+        gold: 1000
+      }
+      assert_raises RuntimeError do
+        f.from_h(h).validate
       end
     end
   end

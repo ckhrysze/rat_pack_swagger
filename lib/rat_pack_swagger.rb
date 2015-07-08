@@ -56,6 +56,7 @@ end
 
 module RatPackSwagger
   module DefinitionClass
+    # makes sure @definition is initialized
     def definition
       @definition ||= {
         type: 'object',
@@ -67,8 +68,8 @@ module RatPackSwagger
 
     # Class declaration API
     def properties(&block)
-      obj = SwaggerObject.new(&block).get
       definition[:properties].merge!(SwaggerObject.new(&block).get)
+      # create top-level property accessors for instance-like usage
       definition[:properties].keys.each do |k|
         self.send(:attr_accessor, k)
       end
@@ -95,8 +96,15 @@ module RatPackSwagger
     def from_h(h)
       properties = definition[:properties] 
       h.each do |k,v|
-        if properties.keys.include?(k.to_sym)
-          send("#{k}=", v)
+        ksym = k.to_sym
+        setter = "#{k}="
+        if properties.keys.include?(ksym)
+          # if property type references another class, instantiate it and use hash data to populate it
+          if properties[ksym][:$ref]
+            send(setter, properties[ksym][:$ref].new.from_h(v))
+          else
+            send("#{k}=", v)
+          end
         end
       end
       self
@@ -159,6 +167,23 @@ module RatPackSwagger
         ref = property[:$ref]
         if ref
           raise "Property #{k} should be a #{ref}, not a #{v.class}" unless ref.to_s == v.class.name
+        end
+
+        # verify enum
+        enum = property[:enum]
+        if enum
+          raise "Enum for property #{k} must be an array, not a #{enum.class}" unless enum.is_a?(Array)
+          raise "Invalid enum value (#{v}) for property #{k}. Valid enum values are #{enum}" unless enum.include?(v)
+        end
+
+        # verify mins and maxes
+        min = property[:minimum]
+        if min
+          raise "Property #{k} value (#{v}) is less than the property minimum (#{min})" unless v >= min
+        end
+        max = property[:maximum]
+        if min
+          raise "Property #{k} value (#{v}) is less than the property maximum (#{max})" unless v <= max
         end
       end
     end
