@@ -91,35 +91,45 @@ module RatPackSwagger
     # Instance API
     def validate
       validate_object(definition, to_h(false))
-      self
+      return self
     end
     def from_h(h)
       properties = definition[:properties] 
       h.each do |k,v|
-        ksym = k.to_sym
+        k = k.to_sym
         setter = "#{k}="
-        if properties.keys.include?(ksym)
+        if properties.keys.include?(k)
           # if property type references another class, instantiate it and use hash data to populate it
-          if properties[ksym][:$ref]
-            send(setter, properties[ksym][:$ref].new.from_h(v))
+          if properties[k][:$ref]
+            send(setter, properties[k][:$ref].new.from_h(v))
+          # if property type is an ARRAY that references another class, instantiate and use hash data to populate them
+          elsif properties[k][:type].to_sym == :array && properties[k][:items][:$ref]
+            send(setter, v.map{|_| properties[k][:items][:$ref].new.from_h(_) })
           else
-            send("#{k}=", v)
+            send(setter, v)
           end
         end
       end
-      self
+      return self
     end
     def to_h(recur = true)
       h = {}
       definition[:properties].keys.each do |p|
         val = send(p)
-        if recur && val.respond_to?(:to_h) && (val.to_h != {})
-          h[p] = val.to_h
-        elsif val
+        puts val
+        if recur
+          if val.is_a? Array
+            h[p] = val.map{|v| v.is_a?(Definition) ? v.to_h : v}
+          elsif val.is_a?(Definition)
+            h[p] = val.to_h
+          else
+            h[p] = val
+          end
+        else 
           h[p] = val
         end
       end
-      h
+      return h
     end
 
     # Validation
@@ -173,7 +183,7 @@ module RatPackSwagger
         enum = property[:enum]
         if enum
           raise "Enum for property #{k} must be an array, not a #{enum.class}" unless enum.is_a?(Array)
-          raise "Invalid enum value (#{v}) for property #{k}. Valid enum values are #{enum}" unless enum.include?(v)
+          raise "Invalid enum value (#{v}) for property #{k}. Valid enum values are #{enum}" unless enum.include?(v) || enum.include?(v.to_sym)
         end
 
         # verify mins and maxes
@@ -247,10 +257,19 @@ module Sinatra
       @@responses[http_status_code] = SwaggerObject.new(**kwargs, &block).get
     end
 
-    def definitions(classes)
+    def definitions(*constants)
       @@doc[:definitions] ||= {}
-      classes.each do |c|
-        @@doc[:definitions][c.to_s.rpartition('::').last] = c.definition
+      constants.each do |constant|
+        if Module === constant
+          constant.constants.each do |c|
+            klass = constant.const_get(c)
+            if Class === klass
+              @@doc[:definitions][c] = klass.definition
+            end
+          end
+        else
+          @@doc[:definitions][constant.to_s.rpartition('::').last] = constant.definition
+        end
       end
     end
 
@@ -278,14 +297,13 @@ module Sinatra
       @@summary ||= ''
       @@responses ||= {}
 
-      @@doc['paths'][path] = {
-        verb.downcase => {
-          tags: @@tags,
-          description: @@description,
-          summary: @@summary,
-          parameters: @@parameters,
-          responses: @@responses
-        }
+      @@doc['paths'][path] ||= {}
+      @@doc['paths'][path][verb.downcase] = {
+        tags: @@tags,
+        description: @@description,
+        summary: @@summary,
+        parameters: @@parameters,
+        responses: @@responses
       }
 
       @@parameters = []
