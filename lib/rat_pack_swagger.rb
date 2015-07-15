@@ -116,10 +116,11 @@ module RatPackSwagger
       h = {}
       definition[:properties].keys.each do |p|
         val = send(p)
+        puts val
         if recur
           if val.is_a? Array
             h[p] = val.map{|v| v.is_a?(Definition) ? v.to_h : v}
-          elsif val.is_a? Definition
+          elsif val.is_a?(Definition)
             h[p] = val.to_h
           else
             h[p] = val
@@ -182,7 +183,7 @@ module RatPackSwagger
         enum = property[:enum]
         if enum
           raise "Enum for property #{k} must be an array, not a #{enum.class}" unless enum.is_a?(Array)
-          raise "Invalid enum value (#{v}) for property #{k}. Valid enum values are #{enum}" unless enum.include?(v)
+          raise "Invalid enum value (#{v}) for property #{k}. Valid enum values are #{enum}" unless enum.include?(v) || enum.include?(v.to_sym)
         end
 
         # verify mins and maxes
