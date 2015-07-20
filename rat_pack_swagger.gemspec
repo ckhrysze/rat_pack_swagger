@@ -9,7 +9,8 @@ Gem::Specification.new "rat_pack_swagger", RatPackSwagger::VERSION do |s|
   s.email = "ratpackswagger@ckhrysze.net"
   s.homepage = "https://github.com/ckhrysze/rat_pack_swagger"
   s.licenses = ["MIT"]
-  
+
+  s.add_dependency("json-schema", ["~> 2.5"])
   s.add_dependency 'sinatra', '~> 1.4'
 
   s.files = Dir.glob("lib/**/*") + %w(LICENSE README.md)
