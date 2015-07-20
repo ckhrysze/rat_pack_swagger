@@ -1,9 +1,11 @@
 # -*- encoding: utf-8 -*-
 # stub: rat_pack_swagger 0.1.0 ruby lib
 
+require_relative "lib/rat_pack_swagger/version"
+
 Gem::Specification.new do |s|
   s.name = "rat_pack_swagger"
-  s.version = "0.1.0"
+  s.version = RatPackSwagger::VERSION
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.require_paths = ["lib"]
@@ -16,6 +18,8 @@ Gem::Specification.new do |s|
   s.licenses = ["MIT"]
   s.rubygems_version = "2.4.8"
   s.summary = "Extend Sinatra DSL for Swagger"
+
+  s.add_runtime_dependency("json-schema", ["~> 2.5"])
 
   if s.respond_to? :specification_version then
     s.specification_version = 4
