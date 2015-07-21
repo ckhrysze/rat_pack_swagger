@@ -112,12 +112,19 @@ module Sinatra
     end
 
     def tags(*args)
-      t = _spec.this_route.tags
-      args.each{|a| t << a}
+      _spec.this_route.tags.concat(args)
     end
 
     def summary(s)
       _spec.this_route.summary = s
+    end
+
+    def consumes(*args)
+      _spec.this_route.consumes.concat(args)
+    end
+
+    def produces(*args)
+      _spec.this_route.produces.concat(args)
     end
 
     def response(http_status_code, **kwargs, &block)
@@ -138,7 +145,7 @@ module Sinatra
 
       app.before do
         @@validators ||= ::RatPackSwagger::RequestValidatorCollection.new
-        vs = @@validators.get(request.path, request.request_method.downcase)
+        vs = @@validators.get(request.path.gsub(/:(\w+)/, '{\1}'), request.request_method.downcase)
         if vs && vs[:body]
           request.body.rewind
           vs[:body].validate(request.body.read)
@@ -151,7 +158,9 @@ module Sinatra
     def self.route_added(verb, path, block)
       return if path == '/v2/swagger.json'
       verb.downcase!
+      path = path.gsub(/:(\w+)/, '{\1}')
       return unless ['get', 'post', 'put', 'delete'].include?(verb)
+      return unless @@spec.this_route.swagger?
       @@spec.register_this_route(path, verb)
 
       parameters = @@spec.resolved_spec[:paths][path][verb][:parameters]
