@@ -28,10 +28,15 @@ module RatPackSwagger
     def initialize
       @tags = []
       @consumes = []
+      @produces = []
       @parameters = []
       @responses = {}
       @schemes = []
       @security = []
+    end
+
+    def swagger?
+      to_h != {}
     end
   end
 
@@ -56,7 +61,7 @@ module RatPackSwagger
     def route_consumes?(path, verb, mime)
       route = @spec[:paths][path][verb]
       return true if route[:consumes] && route[:consumes].include?(mime)
-      return true if @spec[:consumes].include?(mime)
+      return true if @spec[:consumes] && @spec[:consumes].include?(mime)
       return false
     end
 
