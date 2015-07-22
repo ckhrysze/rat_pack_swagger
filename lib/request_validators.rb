@@ -30,6 +30,7 @@ module RatPackSwagger
   end
 
   class JsonBodyValidator
+    attr_reader :schema
     def initialize(schema)
       @schema = schema
     end
