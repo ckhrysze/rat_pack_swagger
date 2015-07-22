@@ -17,7 +17,7 @@ module RatPackSwagger
       @definition
     end
 
-    def to_h
+    def to_swagger_h
       definition
     end
 

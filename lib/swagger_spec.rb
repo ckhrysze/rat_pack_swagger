@@ -81,12 +81,12 @@ module RatPackSwagger
           constant.constants.each do |c|
             klass = constant.const_get(c)
             if klass.is_a?(Class) && klass.ancestors.include?(Definition)
-              @spec[:definitions][c] = klass.definition
+              @spec[:definitions][c] = make_deep_copy(klass.definition)
             end
           end
         else
           if constant.is_a?(Class) && constant.ancestors.include?(Definition)
-            @@doc[:definitions][constant.to_s.rpartition('::').last] = constant.definition
+            @spec[:definitions][constant.to_s.rpartition('::').last] = make_deep_copy(constant.definition)
           end
         end
       end
@@ -120,8 +120,8 @@ module RatPackSwagger
       map_hash_values!(resolved_spec) do |k,v|
         new_v = v
         if v.is_a?(Hash) && v[:$ref]
-          if v[:$ref].respond_to?(:to_h)
-            new_v = v[:$ref].to_h
+          if v[:$ref].respond_to?(:to_swagger_h)
+            new_v = make_deep_copy(v[:$ref].to_swagger_h)
           end
         end
         new_v
